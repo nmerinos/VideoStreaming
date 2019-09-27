@@ -1,0 +1,10 @@
+sudo: required
+
+services:
+  - docker
+
+script:
+  - docker build -t flume .
+
+after_script:
+  - ./run-integration-test.sh

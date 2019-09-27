@@ -1,0 +1,88 @@
+
+
+drop table behavior_es;
+drop table behavior;
+
+drop table demographic;
+CREATE EXTERNAL TABLE demographic(
+key STRING,
+session_id STRING,
+visitor_id STRING,
+time_event INT,
+type STRING,
+playerkey STRING, 
+video_id STRING, 
+https BOOLEAN,
+browser STRING, 
+os STRING, 
+device STRING, 
+host STRING,
+loc1 FLOAT,
+loc2 FLOAT,
+country_name STRING,
+city STRING)
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ("hbase.columns.mapping"=":key,1:session_id,1:visitor_id,1:time_event,2:type,2:playerkey,2:video_id,2:https,2:browser,2:os,2:device,3:host,3:loc1,3:loc2,3:country_name,3:city")
+TBLPROPERTIES("hbase.table.name" = "demographic");
+
+
+CREATE EXTERNAL TABLE behavior(key STRING,
+session_id STRING,
+visitor_id STRING,
+time_event INT,
+type STRING,
+playerkey STRING,
+video_id STRING,
+https BOOLEAN,
+action STRING,
+content_time FLOAT,
+content_total_time FLOAT)
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ("hbase.columns.mapping"=":key,1:session_id,1:visitor_id,1:time_event,2:type,2:playerkey,2:video_id,2:https,3:action,3:content_time,3:content_total_time")
+TBLPROPERTIES("hbase.table.name" = "behavior");
+
+
+
+drop table demographic_es;
+CREATE EXTERNAL TABLE demographic_es (
+session_id string,
+visitor_id string,
+time_event string,    
+type_event string,
+playerkey string, 
+video_id string, 
+https boolean,
+browser string, 
+os string, 
+device string, 
+host string,    
+location  string,
+country_name string,
+city string
+)
+STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler'
+TBLPROPERTIES('es.resource' = 'demographic',
+            'es.nodes' = 'elasticsearch',
+            'es.mapping.date.rich' = 'false',
+            'es.mapping.names' = 'time_event:@time,location:geo');
+
+
+
+CREATE EXTERNAL TABLE behavior_es (
+session_id string,
+visitor_id string,
+time_event string,
+type string,
+playerkey string,
+video_id string,
+https boolean,
+action string,
+content_time float,
+content_total_time float)
+STORED BY 'org.elasticsearch.hadoop.hive.EsStorageHandler'
+TBLPROPERTIES('es.resource' = 'behavior',
+            'es.nodes' = 'elasticsearch',
+            'es.mapping.names' = 'time_event:@time');
+
+
+

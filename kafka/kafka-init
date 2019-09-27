@@ -1,0 +1,13 @@
+#!/bin/bash
+
+/wait-for-step.sh
+/execute-step.sh
+KAFKA_STARTUP="kafka-startup.json"
+KAFKA_INIT="kafka-init.json"
+if [ -f "/config/$KAFKA_STARTUP" ]; then
+  /app/bin/kafka-bin.py "/config/$KAFKA_STARTUP"
+  if [ -f "/config/$KAFKA_INIT" ]; then
+    /app/bin/kafka-bin.py "/config/$KAFKA_INIT"
+  fi
+fi
+/finish-step.sh

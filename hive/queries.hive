@@ -1,0 +1,39 @@
+
+CREATE EXTERNAL TABLE demographic(
+key STRING,
+session_id BIGINT,
+visitor_id BIGINT,
+time_event TIMESTAMP,
+playerkey STRING, 
+video_id STRING, 
+https STRING, 
+browser STRING, 
+os STRING, 
+device STRING, 
+https BOOLEAN,
+host STRING,
+loc1 STRING,
+loc2 STRING,
+country_name STRING,
+city STRING)
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ("hbase.columns.mapping"=":key,1:session_id,1:visitor_id,1:time_event,2:type,2:playerkey,2:video_id,2:https,2:browser,2:os,2:device,3:host,3:loc1,3:loc2,3:country_name,3:city")
+TBLPROPERTIES("hbase.table.name" = "demographic");
+
+
+CREATE EXTERNAL TABLE behavior(key STRING,
+session_id BIGINT,
+visitor_id BIGINT,
+time_event TIMESTAMP,
+type STRING,
+playerkey STRING,
+video_id STRING,
+https BOOLEAN,
+action STRING,
+content_time FLOAT,
+content_total_time FLOAT)
+STORED BY 'org.apache.hadoop.hive.hbase.HBaseStorageHandler'
+WITH SERDEPROPERTIES ("hbase.columns.mapping"=":key,1:session_id,1:visitor_id,1:time_event,2:type,2:playerkey,2:video_id,2:https,3:action,3:content_time,3:content_total_time")
+TBLPROPERTIES("hbase.table.name" = "behavior");
+
+

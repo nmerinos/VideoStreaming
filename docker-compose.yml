@@ -1,0 +1,336 @@
+version: "2"
+
+services:
+
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.1.2-java8
+    container_name: namenode
+    environment:
+      - CLUSTER_NAME=project
+    env_file:
+      - ./env/hadoop.env
+    ports:
+      - 9870:9870
+      - 9820:9820
+      - 9871:9871
+      - 9000:9000
+  
+
+  resourcemanager:
+    image: bde2020/hadoop-resourcemanager:2.0.0-hadoop3.1.2-java8
+    container_name: resourcemanager
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode1:9864"
+    depends_on:
+      - namenode
+    env_file:
+      - ./env/hadoop.env
+    ports:
+      - "8088:8088"
+  
+
+  historyserver:
+    image: bde2020/hadoop-historyserver:2.0.0-hadoop3.1.2-java8
+    container_name: historyserver
+    depends_on:
+      - namenode
+    env_file:
+      - ./env/hadoop.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 resourcemanager:8088"
+    ports:
+      - 8188:8188
+  
+
+  nodemanager:
+    image: bde2020/hadoop-nodemanager:2.0.0-hadoop3.1.2-java8
+    container_name: nodemanager
+    depends_on:
+      - namenode
+    env_file:
+      - ./env/hadoop.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 resourcemanager:8088"
+    
+
+  datanode1:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.1.2-java8
+    container_name: datanode1
+    hostname: datanode1
+    depends_on:
+      - namenode
+    env_file:
+      - ./env/hadoop.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:9870"
+    ports:
+      - 9864:9864
+      - 9865:9865
+      - 8042:8042
+      - 9867:9867
+      - 9866:9866
+
+
+  hbase-master:
+    image: arleicho/hbase-master:2.0.6
+    container_name: hbase-master
+    hostname: hbase-master
+    env_file:
+      - ./env/hbase-distributed-local.env
+    environment:
+      SERVICE_PRECONDITION: "datanode1:9864 zoo:2181"
+      HBASE_CONF_hbase_regionserver_hostname: hbase-region
+    ports:
+      - 16010:16010
+      - 16000:16000
+      - 60000:60000
+      - 60010:60010
+    depends_on:
+      - zoo
+      - namenode
+
+
+  hbase-thrift:
+    image: arleicho/hbase-thrift:2.0.6
+    container_name: hbase-thrift
+    hostname: hbase-thrift
+    env_file:
+      - ./env/hbase-distributed-local.env
+    environment:
+      SERVICE_PRECONDITION: "hbase-master:16010"
+      HBASE_CONF_hbase_regionserver_hostname: hbase-region
+    ports:
+      - 9090:9090
+    depends_on:
+      - hbase-master
+
+
+  hbase-region:
+    image: arleicho/hbase-regionserver:2.0.6
+    container_name: hbase-regionserver
+    hostname: hbase-regionserver
+    env_file:
+      - ./env/hbase-distributed-local.env
+    environment:
+      HBASE_CONF_hbase_regionserver_hostname: hbase-region
+      SERVICE_PRECONDITION: "hbase-master:16010"
+    ports:
+      - 16030:16030
+      - 16020:16020
+      - 60020:60020
+      - 60030:60030
+    depends_on:
+      - hbase-master
+
+
+  zoo:
+    image: zookeeper:3.4.10
+    hostname: zoo
+    container_name: zoo
+    environment:
+      ZOO_MY_ID: 1
+      ZOO_SERVERS: server.1=0.0.0.0:2888:3888
+      ZOO_MAX_CLIENT_CNXNS: 1897657498
+    ports:
+      - 2181:2181
+      - 2888:2888
+      - 3888:3888
+
+
+  hiveserver:
+    image: arleicho/haddop-hive:1.0.0-hadoop3.1.2
+    container_name: hiveserver
+    env_file:
+      - ./env/hadoop-hive.env
+    volumes:
+      - ./config/elasticsearch-hadoop-hive-7.3.2.jar:/opt/hive/lib/elasticsearch-hadoop-hive-7.3.2.jar
+      - ./config/commons-httpclient-3.1.jar:/opt/hive/lib/commons-httpclient-3.1.jar
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://postgresql:5432/metastore"
+      SERVICE_PRECONDITION: "hivemetastore:9083"
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    depends_on:
+      - hivemetastore
+      - hbase-master
+
+
+  hiveclient:
+    image: arleicho/haddop-hive-client:1.0.6-hadoop3.1.2
+    container_name: hiveclient
+    env_file:
+      - ./env/hadoop-hive.env
+    volumes:
+      - ./app/queries.hive:/app/queries.hive
+      - ./config/elasticsearch-hadoop-hive-7.3.2.jar:/opt/hive/lib/elasticsearch-hadoop-hive-7.3.2.jar
+      - ./config/commons-httpclient-3.1.jar:/opt/hive/lib/commons-httpclient-3.1.jar
+    command: /usr/local/bin/startup.sh
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://postgresql:5432/metastore"
+      SERVICE_PRECONDITION: "hiveserver:10000 elasticsearch:9200"
+      HIVE_CLIENT_SQL: /app/queries.hive
+      # ELASTICSEARCH_INIT: /mappings.sh
+    depends_on:
+      - hiveserver
+      - zoo
+
+
+  hivemetastore:
+    image: arleicho/haddop-hive:1.0.0-hadoop3.1.2
+    container_name: hivemetastore
+    volumes:
+      - ./config/elasticsearch-hadoop-hive-7.3.2.jar:/opt/hive/lib/elasticsearch-hadoop-hive-7.3.2.jar
+      - ./config/commons-httpclient-3.1.jar:/opt/hive/lib/commons-httpclient-3.1.jar
+    env_file:
+      - ./env/hadoop-hive.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://postgresql:5432/metastore"
+      SERVICE_PRECONDITION: "namenode:9870 datanode1:9864 postgresql:5432 hbase-master:16010"
+    ports:
+      - "9083:9083"
+    depends_on:
+      - postgresql
+
+
+  postgresql:
+    container_name: postgresql
+    restart: always
+    image: postgres:10.3-alpine
+    environment:
+      POSTGRES_USER: hive
+      POSTGRES_PASSWORD: hive
+      POSTGRES_DB: metastore
+    volumes:
+      - ./docker-entrypoint-initdb.d/:/docker-entrypoint-initdb.d/
+    ports:
+      - "5432:5432"
+
+
+  phppgadmin:
+    container_name: phppgadmin
+    restart: always
+    image: dockage/phppgadmin:latest
+    depends_on:
+      - postgresql
+    ports:
+      - "8001:80"
+    environment:
+      - PHP_PG_ADMIN_SERVER_DESC=PostgreSQL API
+      - PHP_PG_ADMIN_SERVER_HOST=postgresql
+      - PHP_PG_ADMIN_SERVER_PORT=5432
+      - PHP_PG_ADMIN_SERVER_SSL_MODE=allow
+      - PHP_PG_ADMIN_SERVER_PG_DUMP_PATH=/usr/bin/pg_dump
+      - PHP_PG_ADMIN_SERVER_PG_DUMPALL_PATH=/usr/bin/pg_dumpall
+      - PHP_PG_ADMIN_DEFAULT_LANG=auto
+      - PHP_PG_ADMIN_AUTO_COMPLETE=default on
+      - PHP_PG_ADMIN_EXTRA_LOGIN_SECURITY=false
+      - PHP_PG_ADMIN_OWNED_ONLY=false
+      - PHP_PG_ADMIN_SHOW_COMMENTS=true
+      - PHP_PG_ADMIN_SHOW_ADVANCED=false
+      - PHP_PG_ADMIN_SHOW_SYSTEM=false
+      - PHP_PG_ADMIN_MIN_PASSWORD_LENGTH=1
+      - PHP_PG_ADMIN_LEFT_WIDTH=200
+      - PHP_PG_ADMIN_THEME=default
+      - PHP_PG_ADMIN_SHOW_OIDS=false
+      - PHP_PG_ADMIN_MAX_ROWS=30
+      - PHP_PG_ADMIN_MAX_CHARS=50
+      - PHP_PG_ADMIN_USE_XHTML_STRICT=false
+      - PHP_PG_ADMIN_AJAX_REFRESH=3
+
+
+  kafka:  
+    build:
+      context: .
+      dockerfile: ./kafka/Dockerfile
+    hostname: kafka
+    container_name: kafka
+    command: bash -c /app/bin/kafka-init
+    environment:
+      SERVICE_PRECONDITION: "zoo:2181 hivemetastore:9083"
+    depends_on:
+      - zoo
+      - hiveserver
+    ports:
+      - 9092:9092
+
+
+  flume-behavior:
+    build:
+      context: .
+      dockerfile: ./flume/Dockerfile
+    hostname: flume-behavior
+    container_name: flume-behavior
+    volumes:
+      - ./config/project-behavior.conf:/opt/flume-config/flume.conf
+      - ./data/files/behavior:/data/files
+    environment:
+      FLUME_AGENT_NAME: behavior
+      SERVICE_PRECONDITION: "zoo:2181 kafka:9092 hbase-master:16010"
+    command: bash -c start-flume
+    depends_on:
+      - kafka
+
+
+  flume-demographics:
+    build:
+      context: .
+      dockerfile: ./flume/Dockerfile
+    hostname: flume-demographics
+    container_name: flume-demographics
+    volumes:
+      - ./config/project-demographics.conf:/opt/flume-config/flume.conf
+      - ./data/files/demographics:/data/files
+    environment:
+      FLUME_AGENT_NAME: demographic
+      SERVICE_PRECONDITION: "zoo:2181 kafka:9092 hbase-master:16010"
+    command: bash -c start-flume
+    depends_on:
+      - kafka
+
+
+  spark-submit-1:
+    build:
+      context: .
+      dockerfile: ./spark/submit/Dockerfile
+    container_name: spark-submit-1
+    hostname: spark-submit-1
+    command: bash -c /submit.sh
+    depends_on:
+      - kafka
+      - hbase-master
+    volumes:
+      - ./app/:/app/
+    environment:
+      ENABLE_INIT_DAEMON: "false"
+      SERVICE_PRECONDITION: "kafka:9092 hbase-master:16010"
+      START_APPLICATION_JAVA_LOCATION: "/app/A-0.0.1-SNAPSHOT.jar"
+      SPARK_APPLICATION_JAVA_INIT: "bdt.project.HBaseClient"
+      SPARK_APPLICATION_JAVA_USER: "bdt.project.ConsumerDemographics"
+      SPARK_APPLICATION_JAVA_BEHAVIOR: "bdt.project.ConsumerBehavior"
+
+
+  visualization:
+    container_name: visualization
+    image: docker.elastic.co/kibana/kibana:7.3.2
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+
+  elasticsearch:
+    container_name: elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.3.2
+    volumes:
+      - ./data/elasticsearch://usr/share/elasticsearch/data
+    environment:
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    ports:
+      - "9200:9200"

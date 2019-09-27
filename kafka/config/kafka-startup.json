@@ -1,0 +1,7 @@
+[
+ {
+   "sh":"/app/bin/kafka-server-start.sh",
+   "./config/server.properties":"",
+   "--override":"zookeeper.connect=zoo:2181/kafka"
+ }
+]
